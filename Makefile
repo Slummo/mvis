@@ -9,7 +9,7 @@ $(BUILD_DIR)/CMakeCache.txt:
 	@cmake -S . -B $(BUILD_DIR) --log-level=$(LOG_LEVEL)
 
 run: all
-	@$(BUILD_DIR)/main
+	@$(BUILD_DIR)/main $(ARGS)
 
 clean:
 	@rm -rf $(BUILD_DIR)

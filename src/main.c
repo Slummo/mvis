@@ -1,50 +1,48 @@
-#include <fft/fft.h>
+#include <mvis/track.h>
+#include <mvis/window.h>
+#include <mvis/render.h>
 
-#include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
-#include <math.h>
 
-#define NOF_SAMPLES (1ul << 12)
-#define FREQ(hz) (2 * M_PI * hz)
+#define WIDTH (640)
+#define HEIGHT (400)
+#define TITLE ("MVIS")
 
-static inline double signal1(double t) {
-    return sin(FREQ(3.0) * t);
-}
+int32_t main(int32_t argc, char** argv) {
+    int32_t ret = EXIT_FAILURE;
 
-static inline double signal2(double t) {
-    return sin(FREQ(10.0) * t) + cos(FREQ(2.0) * t) + sin(FREQ(5.0) * t);
-}
+    track* track = NULL;
+    GLFWwindow* window = NULL;
 
-typedef double (*signal)(double t);
-
-static double complex* sample(signal g, const uint64_t N, const double fs) {
-    double complex* samples = malloc(sizeof(double complex) * N);
-    if (!samples) {
-        return NULL;
+    track = track_new(argv[1]);
+    if (!track) {
+        goto cleanup;
     }
 
-    const double dt = 1.0 / fs;
-    for (uint64_t i = 0; i < N; ++i) {
-        double t = i * dt;
-        samples[i] = g(t) + 0.0 * I;
+    window = window_new(WIDTH, HEIGHT, TITLE);
+    if (!window) {
+        goto cleanup;
     }
 
-    return samples;
-}
-
-int main(void) {
-    const double fs = 30.0;  // sampling frequency
-    double complex* samples = sample(signal2, NOF_SAMPLES, fs);
-    double complex* freqs = fft(samples, NOF_SAMPLES);
-
-    for (uint64_t i = 0; i < NOF_SAMPLES; ++i) {
-        double f = fs * (double)i / (double)NOF_SAMPLES;
-        // double m = 2.0 * cabs(freqs[i]) / (double)NOF_SAMPLES;  // normalize magnitudes
-        double m = cabs(freqs[i]);
-        printf("%lf %lf\n", f, m);
+    render_ctx ctx = {0};
+    if (render_init(&ctx) != 0) {
+        goto cleanup;
     }
 
-    free(samples);
-    free(freqs);
-    return 0;
+    int32_t stop = 0;
+    while (!window_should_close(window) && !stop) {
+        stop = draw_track(&ctx, track, 0.0f, 0.0f, 2.0f, 2.0f);
+        window_swap_buffers(window);
+        poll_events();
+    }
+
+    ret = EXIT_SUCCESS;
+
+cleanup:
+    window_free(window);
+    track_free(&track);
+    render_ctx_free(&ctx);
+
+    return ret;
 }

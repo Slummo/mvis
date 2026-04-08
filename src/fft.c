@@ -1,9 +1,10 @@
-#include <fft/fft.h>
+#include <mvis/fft.h>
 
 #include <stddef.h>
 #include <stdlib.h>
-#include <math.h>
 #include <omp.h>
+
+#define PI (3.14159265358979323846)
 
 static inline uint64_t log2ld(uint64_t n) {
     uint64_t i = 0;
@@ -47,7 +48,7 @@ double complex* fft(const double complex* samples, const uint64_t nof_samples) {
     uint64_t l = log2ld(nof_samples);
     for (uint64_t i = 1; i <= l; ++i) {
         uint64_t m = 1ul << i;  // 2^i
-        double complex wm = cexp(-2 * M_PI * I / m);
+        double complex wm = cexp(-2 * PI * I / m);
 
 #pragma omp parallel for
         for (uint64_t j = 0; j < nof_samples; j += m) {

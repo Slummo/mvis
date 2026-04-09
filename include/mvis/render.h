@@ -1,18 +1,28 @@
 #pragma once
 
-#include <stdint.h>
+#include <stddef.h>
 
-typedef struct track track;
+typedef enum shape2D { SHAPE_RECTANGLE = 0, SHAPE_OVAL, NOF_SHAPES } shape2D;
 
-typedef struct render_ctx {
-    uint32_t program;
-    uint32_t vao;
-    uint32_t pos_vbo;
-    uint32_t ebo;
-    uint32_t inst_vbo;
-} render_ctx;
+typedef struct col4f {
+    float r;
+    float g;
+    float b;
+    float a;
+} col4f;
 
-void render_ctx_free(render_ctx* ctx);
+typedef struct color_gradient {
+    size_t n;
+    col4f* colors;
+    float* percentages;
+} color_gradient;
 
-int32_t render_init(render_ctx* ctx);
-int32_t draw_track(render_ctx* ctx, track* track, float offx, float offy, float width, float height);
+typedef struct visualizer visualizer;
+
+visualizer* visualizer_new(size_t nof_instances);
+void visualizer_set_background(visualizer* visualizer, col4f background);
+void visualizer_set_shape(visualizer* visualizer, shape2D s);
+void visualizer_set_gradient(visualizer* visualizer, color_gradient* gradient);
+void visualizer_set_heights(visualizer* visualizer, size_t n, const double heights[static n]);
+void visualizer_draw(const visualizer* visualizer);
+void visualizer_free(visualizer** visualizer_ptr);

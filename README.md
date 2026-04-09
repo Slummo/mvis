@@ -19,8 +19,10 @@
 
 <https://glad.dav1d.de/>
 
-### Python modules
+### OpenGL
 
-<https://pyqtgraph.readthedocs.io/en/latest/>
+<https://learnopengl.com/>
 
-<https://doc.qt.io/qtforpython-6/>
+### PortAudio
+
+<https://files.portaudio.com/docs/v19-doxydocs/index.html>

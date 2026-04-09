@@ -18,6 +18,7 @@ endif()
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SNDFILE REQUIRED IMPORTED_TARGET sndfile)
+pkg_check_modules(PORTAUDIO REQUIRED IMPORTED_TARGET portaudio-2.0)
 find_package(glfw3 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(OpenMP REQUIRED)
@@ -25,35 +26,28 @@ find_package(OpenMP REQUIRED)
 # glad
 add_subdirectory(extern)
 
-# track
-add_library(track STATIC src/track.c)
-target_include_directories(track PUBLIC include)
-target_link_libraries(track PRIVATE PkgConfig::SNDFILE)
-add_library(mvis::track ALIAS track)
-
 # window
 add_library(window STATIC src/window.c)
 target_include_directories(window PUBLIC include)
-target_link_libraries(window PRIVATE mvis::glad glfw OpenGL)
+target_link_libraries(window PRIVATE mvis::glad glfw)
 add_library(mvis::window ALIAS window)
 
-# fft
-add_library(fft STATIC src/fft.c)
-target_include_directories(fft PUBLIC include)
-target_link_libraries(fft PRIVATE OpenMP::OpenMP_C)
-add_library(mvis::fft ALIAS fft)
-
-# io
-add_library(io STATIC src/io.c)
-target_include_directories(io PUBLIC include)
-add_library(mvis::io ALIAS io)
+# audio
+add_library(audio STATIC src/audio/stream.c src/audio/fft.c)
+target_include_directories(audio PUBLIC include)
+target_include_directories(audio PRIVATE ${PORTAUDIO_INCLUDE_DIRS})
+target_compile_definitions(audio PRIVATE _GNU_SOURCE)
+target_link_libraries(audio PRIVATE m PkgConfig::SNDFILE ${PORTAUDIO_LIBRARIES} OpenMP::OpenMP_C)
+add_library(mvis::audio ALIAS audio)
 
 # render
-add_library(render STATIC src/render.c)
+add_library(render STATIC src/render/io.c src/render/visualizer.c)
 target_include_directories(render PUBLIC include)
 target_compile_definitions(render PRIVATE _GNU_SOURCE)
-target_link_libraries(render PRIVATE mvis::glad OpenGL::GL mvis::track mvis::io m)
+target_link_libraries(render PRIVATE m mvis::glad OpenGL::GL)
 add_library(mvis::render ALIAS render)
 
+# main
 add_executable(main src/main.c)
-target_link_libraries(main PRIVATE mvis::track mvis::window mvis::fft mvis::render)
+target_compile_definitions(main PRIVATE _GNU_SOURCE)
+target_link_libraries(main PRIVATE mvis::window mvis::audio mvis::render)

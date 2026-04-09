@@ -1,4 +1,4 @@
-#include <mvis/io.h>
+#include "io.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +20,7 @@ char* file_content(const char* filename) {
         return NULL;
     }
 
-    size_t newlen = fread(content, 1, size, f);
+    fread(content, 1, size, f);
     content[size] = '\0';
 
     fclose(f);

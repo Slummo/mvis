@@ -1,52 +1,11 @@
-#include <mvis/render.h>
-#include "io.h"
+#include "visualizer.h"
+#include "io/io.h"
 #include <glad/glad.h>
 #include <mvis/log.h>
-
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-
-typedef enum program { PROG_RECT = 0, PROG_OVAL, NOF_PROGRAMS } program;
-typedef enum vertex_array { VAO = 0, NOF_VERTEX_ARRAYS } vertex_array;
-typedef enum buffer { RECT_VBO = 0, RECT_EBO, INST_VBO, NOF_BUFFERS } buffer;
-
-typedef struct vec2f {
-    float x;
-    float y;
-} vec2f;
-
-typedef struct vec3f {
-    float x;
-    float y;
-    float z;
-} vec3f;
-
-typedef struct mat3f {
-    vec3f v1;
-    vec3f v2;
-    vec3f v3;
-} mat3f;
-
-static inline mat3f mat3f_model(vec2f scale, vec2f transform, vec2f skew) {
-    return (mat3f){{scale.x, skew.x, 0.0f}, {skew.y, scale.y, 0.0f}, {transform.x, transform.y, 1.0f}};
-}
-
-typedef struct instance {
-    mat3f model;
-    vec3f color;
-} instance;
-
-struct visualizer {
-    GLuint programs[NOF_PROGRAMS];
-    GLuint vertex_arrays[NOF_VERTEX_ARRAYS];
-    GLuint buffers[NOF_BUFFERS];
-    col4f background;
-    color_gradient* gradient;
-    size_t nof_instances;
-    instance* instances;
-};
 
 static GLuint compile_shader(GLenum type, const char* source) {
     GLuint s = glCreateShader(type);
@@ -156,35 +115,36 @@ static void create_buffers(visualizer* v) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, v->buffers[RECT_EBO]);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(rect_indices), rect_indices, GL_STATIC_DRAW);
 
-    // Instance VBO
+    // instance_data VBO
     glBindBuffer(GL_ARRAY_BUFFER, v->buffers[INST_VBO]);
-    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(sizeof(instance) * v->nof_instances), NULL,
+    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(sizeof(instance_data) * v->nof_instance_datas), NULL,
                  GL_DYNAMIC_DRAW);  // Uninitialized
 
-    VERTEX_ATTRIB(1, sizeof(vec3f), sizeof(instance), sizeof(vec3f) * 0, 1, 1);  // model vec1
-    VERTEX_ATTRIB(2, sizeof(vec3f), sizeof(instance), sizeof(vec3f) * 1, 1, 1);  // model vec2
-    VERTEX_ATTRIB(3, sizeof(vec3f), sizeof(instance), sizeof(vec3f) * 2, 1, 1);  // model vec3
-    VERTEX_ATTRIB(4, sizeof(vec3f), sizeof(instance), sizeof(vec3f) * 3, 1, 1);  // color
+    VERTEX_ATTRIB(1, sizeof(vec3f), sizeof(instance_data), sizeof(vec3f) * 0, 1, 1);  // model vec1
+    VERTEX_ATTRIB(2, sizeof(vec3f), sizeof(instance_data), sizeof(vec3f) * 1, 1, 1);  // model vec2
+    VERTEX_ATTRIB(3, sizeof(vec3f), sizeof(instance_data), sizeof(vec3f) * 2, 1, 1);  // model vec3
+    VERTEX_ATTRIB(4, sizeof(vec3f), sizeof(instance_data), sizeof(vec3f) * 3, 1, 1);  // color
 }
 
-visualizer* visualizer_new(size_t nof_instances) {
-    visualizer* v = calloc(1, sizeof(visualizer));
-    instance* instances = calloc(nof_instances, sizeof(instance));
-    if (!v || !instances) {
-        ERR("OOM");
-        free(v);
-        free(instances);
-        return NULL;
+int visualizer_init(visualizer* visualizer, size_t nof_instance_datas) {
+    if (!visualizer) {
+        return 1;
     }
 
-    v->nof_instances = nof_instances;
-    v->instances = instances;
+    instance_data* instance_datas = calloc(nof_instance_datas, sizeof(instance_data));
+    if (!instance_datas) {
+        ERR("OOM");
+        return 1;
+    }
 
-    create_programs(v);
-    create_vertex_arrays(v);
-    create_buffers(v);
+    visualizer->nof_instance_datas = nof_instance_datas;
+    visualizer->instance_datas = instance_datas;
 
-    return v;
+    create_programs(visualizer);
+    create_vertex_arrays(visualizer);
+    create_buffers(visualizer);
+
+    return 0;
 }
 
 void visualizer_set_background(visualizer* visualizer, col4f background) {
@@ -207,40 +167,55 @@ void visualizer_set_gradient(visualizer* visualizer, color_gradient* gradient) {
     visualizer->gradient = gradient;
 }
 
-void visualizer_set_heights(visualizer* visualizer, size_t n, const double heights[static n]) {
-    assert(visualizer && n >= visualizer->nof_instances);
+void visualizer_set_heights(visualizer* visualizer, size_t n, const float heights[static n]) {
+    assert(visualizer && n >= visualizer->nof_instance_datas);
 
-    const size_t draw_count = visualizer->nof_instances;
-    const float dx = 2.0f / draw_count;
-    const double bin_min = 1.0;
-    const double bin_max = (double)n;
+    const size_t draw_count = visualizer->nof_instance_datas;
+    const float dx = 2.0f / draw_count;  // X spans from -1.0 to 1.0
+    const float bin_min = 1.0;
+    const float bin_max = n;
 
+    size_t last_bin_end = 0;
     for (size_t i = 0; i < draw_count; ++i) {
-        double t = (double)i / draw_count;
-        double t_next = (double)(i + 1) / draw_count;
+        // Normalized between 0.0 and 1.0
+        float t = (float)i / draw_count;
+        float t_next = (float)(i + 1) / draw_count;
 
-        size_t bin_start = (size_t)(bin_min * pow(bin_max / bin_min, t));
-        size_t bin_end = (size_t)(bin_min * pow(bin_max / bin_min, t_next));
+        // Exponential to map t to a bin
+        size_t bin_start = (size_t)(bin_min * powf(bin_max / bin_min, t));
+        size_t bin_end = (size_t)(bin_min * powf(bin_max / bin_min, t_next));
+
+        // Start from the previous bin
+        if (bin_start < last_bin_end) {
+            bin_start = last_bin_end;
+        }
+
+        // Every bin spans at least one index
         if (bin_end <= bin_start) {
             bin_end = bin_start + 1;
         }
+
+        // Avoid OOB
         if (bin_end > n) {
             bin_end = n;
         }
 
-        double sum = 0.0;
+        last_bin_end = bin_end;
+
+        // Arithemtic mean
+        float sum = 0.0;
         for (size_t j = bin_start; j < bin_end; ++j) {
             sum += heights[j];
         }
-        float h = (float)(sum / (bin_end - bin_start));
 
+        float h = (float)(sum / (bin_end - bin_start));
         vec2f c = {-1.0f + dx * i + dx / 2.0f, -1.0f + h / 2.0f};
-        visualizer->instances[i].model = mat3f_model((vec2f){dx, h}, c, (vec2f){0});
-        visualizer->instances[i].color = (vec3f){1.0f - h, 0.0f, h};
+        visualizer->instance_datas[i].model = mat3f_model((vec2f){dx, h}, c, (vec2f){0});
+        visualizer->instance_datas[i].color = (vec3f){h, 1.0f - h, 0.0f};
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, visualizer->buffers[INST_VBO]);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(sizeof(instance) * draw_count), visualizer->instances);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(sizeof(instance_data) * draw_count), visualizer->instance_datas);
 }
 
 void visualizer_draw(const visualizer* visualizer) {
@@ -248,27 +223,21 @@ void visualizer_draw(const visualizer* visualizer) {
     glClearColor(b.r, b.g, b.b, b.a);
     glClear(GL_COLOR_BUFFER_BIT);
     glBindVertexArray(visualizer->vertex_arrays[VAO]);
-    glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, visualizer->nof_instances);
+    glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, visualizer->nof_instance_datas);
 }
 
-void visualizer_free(visualizer** visualizer_ptr) {
-    if (!visualizer_ptr) {
-        return;
-    }
-
-    visualizer* v = *visualizer_ptr;
-    if (!v) {
+void visualizer_cleanup(visualizer* visualizer) {
+    if (!visualizer) {
         return;
     }
 
     for (int i = 0; i < NOF_PROGRAMS; ++i) {
-        glDeleteProgram(v->programs[i]);
+        glDeleteProgram(visualizer->programs[i]);
     }
-    glDeleteVertexArrays(NOF_VERTEX_ARRAYS, v->vertex_arrays);
-    glDeleteBuffers(NOF_BUFFERS, v->buffers);
+    glDeleteVertexArrays(NOF_VERTEX_ARRAYS, visualizer->vertex_arrays);
+    glDeleteBuffers(NOF_BUFFERS, visualizer->buffers);
 
-    free(v->instances);
-    free(v);
+    free(visualizer->instance_datas);
 
-    *visualizer_ptr = NULL;
+    memset(visualizer, 0, sizeof(struct visualizer));
 }

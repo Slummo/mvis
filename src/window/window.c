@@ -1,8 +1,6 @@
-#include <mvis/window.h>
+#include "window.h"
 #include <mvis/log.h>
-
 #include <signal.h>
-
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 

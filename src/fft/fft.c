@@ -1,5 +1,4 @@
 #include "fft.h"
-
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
@@ -24,7 +23,7 @@ static inline size_t bit_reverse(size_t n, size_t m) {
     return r;
 }
 
-int fft(size_t n, double complex samples[static n]) {
+int fft(size_t n, float complex samples[static n]) {
     if (!check_pow2(n)) {
         return 1;
     }
@@ -34,24 +33,24 @@ int fft(size_t n, double complex samples[static n]) {
     for (size_t i = 0; i < n; ++i) {
         size_t j = bit_reverse(i, n);
         if (i < j) {
-            double complex temp = samples[i];
+            float complex temp = samples[i];
             samples[i] = samples[j];
             samples[j] = temp;
         }
     }
 
     const size_t l = log2ld(n);
-    const double complex f = -2 * M_PI * I;
+    const float complex f = -2 * M_PI * I;
     for (size_t i = 1; i <= l; ++i) {
         size_t m = 1ull << i;  // 2^i
-        double complex wm = cexp(f / m);
+        float complex wm = cexpf(f / m);
 
 #pragma omp parallel for
         for (size_t j = 0; j < n; j += m) {
-            double complex w = 1;
+            float complex w = 1;
             for (size_t k = 0; k <= m / 2 - 1; ++k) {
-                double complex t = w * samples[j + k + m / 2];
-                double complex u = samples[j + k];
+                float complex t = w * samples[j + k + m / 2];
+                float complex u = samples[j + k];
                 samples[j + k] = u + t;
                 samples[j + k + m / 2] = u - t;
                 w *= wm;

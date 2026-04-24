@@ -14,6 +14,10 @@ static void GLAPIENTRY debug_callback(GLenum source, GLenum type, GLuint id, GLe
     }
 }
 
+static void framebuffer_size_callback(GLFWwindow* window, int32_t width, int32_t height) {
+    glViewport(0, 0, width, height);
+}
+
 GLFWwindow* window_new(int32_t w, int32_t h, const char* title) {
     // Initialize GLFW
     if (!glfwInit()) {
@@ -53,6 +57,7 @@ GLFWwindow* window_new(int32_t w, int32_t h, const char* title) {
     }
 
     glViewport(0, 0, w, h);
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
     return window;
 }

@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
         goto cleanup;
     }
 
-    track_id t1 = engine_add(engine, "song.wav", WIN_LEN);
+    track_id t1 = engine_add(engine, "audio.wav", WIN_LEN);
     if (t1 == -1) {
         ERR("engine_add failed");
         goto cleanup;

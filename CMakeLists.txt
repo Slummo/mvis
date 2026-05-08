@@ -1,21 +1,12 @@
 cmake_minimum_required(VERSION 4.0)
-project(mvis VERSION 3.0.0 LANGUAGES C)
-add_compile_options(
-    -Wall
-    -Wextra
-    -Werror
-    -Wsign-conversion
-    -Wno-unused
-    -O3
-    -march=native
-    # -O0
-    # -g
-)
+project(mvis VERSION 1.0.0 LANGUAGES C)
 
-# Strip the project source directory from __FILE__ macros
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-  add_compile_options(-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=)
-endif()
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/common.cmake)
+
+set_default_build_type()
+set_output_directories()
+
+add_subdirectory(extern)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SNDFILE REQUIRED IMPORTED_TARGET sndfile)
@@ -24,33 +15,23 @@ find_package(glfw3 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(OpenMP REQUIRED)
 
-# fft
-add_library(fft STATIC src/fft/fft.c)
-target_include_directories(fft PRIVATE include)
-target_compile_definitions(fft PUBLIC _GNU_SOURCE)
-target_link_libraries(fft PUBLIC m PRIVATE OpenMP::OpenMP_C)
-add_library(mvis::fft ALIAS fft)
-
-# io
-add_library(io STATIC src/io/io.c)
-target_include_directories(io PRIVATE include)
-add_library(mvis::io ALIAS io)
-
-# glad
-add_subdirectory(extern)
-
-# window
-add_library(window STATIC src/window/window.c)
-target_include_directories(window PRIVATE include)
-target_link_libraries(window PUBLIC mvis::glad OpenGL::GL PRIVATE glfw)
-add_library(mvis::window ALIAS window)
-
-# engine
-add_library(engine STATIC src/engine/stream.c src/engine/player.c src/engine/visualizer.c src/engine/engine.c)
-target_include_directories(engine PUBLIC include PRIVATE src ${PORTAUDIO_INCLUDE_DIRS})
-target_link_libraries(engine PRIVATE PkgConfig::SNDFILE ${PORTAUDIO_LIBRARIES} mvis::fft mvis::io mvis::window)
-add_library(mvis::engine ALIAS engine)
-
-# main
-add_executable(main src/main.c)
-target_link_libraries(main PRIVATE mvis::engine)
+# Executable
+add_executable(${PROJECT_NAME} "")
+target_sources(${PROJECT_NAME} PRIVATE
+    src/fft/fft.c
+    src/io/io.c
+    src/window/window.c
+    src/engine/stream.c
+    src/engine/player.c
+    src/engine/visualizer.c
+    src/engine/engine.c
+    src/main.c
+)
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${PORTAUDIO_INCLUDE_DIRS}
+)
+target_compile_features(${PROJECT_NAME} PRIVATE c_std_11)
+apply_compile_options(${PROJECT_NAME})
+target_link_libraries(${PROJECT_NAME} PRIVATE m OpenMP::OpenMP_C mvis::glad OpenGL::GL glfw PkgConfig::SNDFILE ${PORTAUDIO_LIBRARIES})
